@@ -1,5 +1,5 @@
 name: 'Flare Deploy Webhook'
-description: 'Trigger a post-deploy security review. Flare compares pre-deploy and post-deploy cloud audit logs to catch IAM changes, new service accounts, and permission shifts.'
+description: 'Post-deploy security review. Compares cloud audit logs before and after each deploy.'
 author: 'Flare AI'
 
 branding:

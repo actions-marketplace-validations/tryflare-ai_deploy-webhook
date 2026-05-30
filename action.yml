@@ -1,0 +1,81 @@
+name: 'Flare Deploy Webhook'
+description: 'Trigger a post-deploy security review. Flare compares pre-deploy and post-deploy cloud audit logs to catch IAM changes, new service accounts, and permission shifts.'
+author: 'Flare AI'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  token:
+    description: 'Flare webhook token (starts with flr_). Generate one from the Connectors page at tryflare.ai.'
+    required: true
+  api-url:
+    description: 'Flare webhook endpoint URL. Override only for self-hosted or staging.'
+    required: false
+    default: 'https://www.tryflare.ai/api/webhooks/deploy'
+  commit-sha:
+    description: 'Git commit SHA of the deployment. Defaults to the current commit.'
+    required: false
+    default: ${{ github.sha }}
+  branch:
+    description: 'Branch that was deployed. Defaults to the current branch.'
+    required: false
+    default: ${{ github.ref_name }}
+  environment:
+    description: 'Deployment environment (e.g., production, staging).'
+    required: false
+
+outputs:
+  analysis-at:
+    description: 'ISO timestamp when the post-deploy analysis will run.'
+    value: ${{ steps.webhook.outputs.analysis_at }}
+  queued:
+    description: 'Whether the analysis was successfully queued (true/false).'
+    value: ${{ steps.webhook.outputs.queued }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Fire Flare deploy webhook
+      id: webhook
+      shell: bash
+      run: |
+        # Build JSON payload
+        PAYLOAD="{}"
+        PAYLOAD=$(echo "$PAYLOAD" | jq --arg sha "${{ inputs.commit-sha }}" '. + {commit_sha: $sha}')
+        PAYLOAD=$(echo "$PAYLOAD" | jq --arg branch "${{ inputs.branch }}" '. + {branch: $branch}')
+        if [ -n "${{ inputs.environment }}" ]; then
+          PAYLOAD=$(echo "$PAYLOAD" | jq --arg env "${{ inputs.environment }}" '. + {environment: $env}')
+        fi
+
+        # Fire the webhook
+        HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" \
+          -X POST "${{ inputs.api-url }}" \
+          -H "Authorization: Bearer ${{ inputs.token }}" \
+          -H "Content-Type: application/json" \
+          -d "$PAYLOAD")
+
+        HTTP_BODY=$(echo "$HTTP_RESPONSE" | head -n -1)
+        HTTP_CODE=$(echo "$HTTP_RESPONSE" | tail -n 1)
+
+        # Parse response
+        if [ "$HTTP_CODE" = "202" ]; then
+          ANALYSIS_AT=$(echo "$HTTP_BODY" | jq -r '.analysis_at // empty')
+          CONNECTOR=$(echo "$HTTP_BODY" | jq -r '.connector_name // empty')
+          echo "analysis_at=$ANALYSIS_AT" >> "$GITHUB_OUTPUT"
+          echo "queued=true" >> "$GITHUB_OUTPUT"
+          echo "::notice::Flare: post-deploy analysis queued for $CONNECTOR. Results at $ANALYSIS_AT."
+        elif [ "$HTTP_CODE" = "401" ]; then
+          echo "::error::Flare: authentication failed. Check that FLARE_WEBHOOK_TOKEN is set correctly."
+          echo "queued=false" >> "$GITHUB_OUTPUT"
+          exit 1
+        elif [ "$HTTP_CODE" = "409" ]; then
+          echo "::error::Flare: connector is inactive. Reconnect your GCP connector at tryflare.ai."
+          echo "queued=false" >> "$GITHUB_OUTPUT"
+          exit 1
+        else
+          echo "::warning::Flare: unexpected response (HTTP $HTTP_CODE). Body: $HTTP_BODY"
+          echo "queued=false" >> "$GITHUB_OUTPUT"
+          exit 1
+        fi

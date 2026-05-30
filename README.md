@@ -31,7 +31,7 @@ jobs:
       # ... your deploy steps ...
 
       - name: Flare post-deploy security review
-        uses: flare-ai/deploy-webhook@v1
+        uses: tryflare-ai/deploy-webhook@v1
         with:
           token: ${{ secrets.FLARE_WEBHOOK_TOKEN }}
 ```
@@ -65,7 +65,7 @@ jobs:
 
 ```yaml
 - name: Flare post-deploy security review
-  uses: flare-ai/deploy-webhook@v1
+  uses: tryflare-ai/deploy-webhook@v1
   with:
     token: ${{ secrets.FLARE_WEBHOOK_TOKEN }}
     environment: production
@@ -76,7 +76,7 @@ jobs:
 ```yaml
 - name: Flare post-deploy security review
   if: github.ref == 'refs/heads/main'
-  uses: flare-ai/deploy-webhook@v1
+  uses: tryflare-ai/deploy-webhook@v1
   with:
     token: ${{ secrets.FLARE_WEBHOOK_TOKEN }}
     environment: production
@@ -87,7 +87,7 @@ jobs:
 ```yaml
 - name: Flare post-deploy security review
   id: flare
-  uses: flare-ai/deploy-webhook@v1
+  uses: tryflare-ai/deploy-webhook@v1
   with:
     token: ${{ secrets.FLARE_WEBHOOK_TOKEN }}
 
